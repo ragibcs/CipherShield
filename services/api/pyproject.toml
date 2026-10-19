@@ -30,7 +30,6 @@ include = ["app*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
 asyncio_mode = "auto"
 filterwarnings = ["error::DeprecationWarning"]
 

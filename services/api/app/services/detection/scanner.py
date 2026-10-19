@@ -22,11 +22,28 @@ class ScanResult:
 
 
 def compact_with_map(text: str) -> tuple[str, list[int]]:
-    """Remove whitespace while recording original offsets (AB-07 support)."""
+    """Collapse whitespace runs into a single `-`, recording original offsets.
+
+    The joiner is chosen deliberately:
+    - it is a word-boundary character for `\\b` (unlike a plain deletion,
+      which glues `credential` to `sk-...` and silently defeats the pattern),
+    - it is inside the token character classes, so a secret split across
+      whitespace rejoins into one match (AB-07).
+
+    Each output character maps back to one original offset.
+    """
     chars: list[str] = []
     index_map: list[int] = []
+    in_whitespace = False
     for index, char in enumerate(text):
-        if not char.isspace():
+        if char.isspace():
+            if in_whitespace:
+                continue
+            in_whitespace = True
+            chars.append("-")
+            index_map.append(index)
+        else:
+            in_whitespace = False
             chars.append(char)
             index_map.append(index)
     return "".join(chars), index_map
@@ -46,7 +63,7 @@ class SecretScanner:
             raw.extend(detector.find(text))
             if detector.scan_compact and text:
                 raw.extend(self._scan_compact(detector, text))
-        ordered = _resolve_overlaps(raw)
+        ordered = _resolve_overlaps(raw, text)
         counts: dict[str, int] = {}
         for finding in ordered:
             counts[finding.category] = counts.get(finding.category, 0) + 1
@@ -55,7 +72,7 @@ class SecretScanner:
     @staticmethod
     def _scan_compact(detector: BaseDetector, text: str) -> list[Finding]:
         compact, index_map = compact_with_map(text)
-        if len(compact) == len(text):  # no whitespace: already scanned
+        if compact == text:  # no whitespace present: raw scan already covered it
             return []
         findings: list[Finding] = []
         for finding in detector.find(compact):
@@ -79,10 +96,12 @@ class SecretScanner:
 
 
 # A whitespace-compacted finding may only replace an exact finding when it
-# covers it fully AND extends the redacted span meaningfully; otherwise the
-# exact (precision-safe) match wins.
+# covers it fully, crosses at most ONE whitespace run (a genuine split point -
+# more runs mean distinct words were glued together), and extends the redacted
+# span meaningfully.
 SPLIT_MIN_GAIN = 8
-_SPLIT_SUFFIX = "_split"
+SPLIT_SUFFIX = "_split"
+_WHITESPACE_RUN = re.compile(r"\s+")
 
 
 def _greedy(findings: list[Finding]) -> list[Finding]:
@@ -95,17 +114,24 @@ def _greedy(findings: list[Finding]) -> list[Finding]:
     return kept
 
 
-def _resolve_overlaps(findings: list[Finding]) -> list[Finding]:
+def _resolve_overlaps(findings: list[Finding], text: str) -> list[Finding]:
     """Resolve overlaps so no two findings share a character.
 
     Exact (raw) findings take priority over whitespace-compacted (`*_split`)
-    findings at the same position, because compaction can greedily swallow the
-    following word. A split finding still wins when it fully covers an exact
-    match and extends it by `SPLIT_MIN_GAIN`+ characters — that is the genuine
-    split-secret case (AB-07), where leaving the tail would leak part of it.
+    findings at the same position, because compaction can greedily glue
+    distinct words or separate secrets together. A split finding wins only
+    when ALL of the following hold:
+
+    1. it fully covers exactly ONE conflicting exact finding - two complete
+       secrets side by side must stay separate (a merge would silently drop
+       one),
+    2. its span crosses at most ONE whitespace run - a genuine split point;
+       more runs mean we glued distinct words (precision over recall), and
+    3. it extends the exact match by `SPLIT_MIN_GAIN`+ characters - a real
+       secret tail, not a stray neighboring word (AB-07).
     """
-    exact = [f for f in findings if not f.detector.endswith(_SPLIT_SUFFIX)]
-    split = [f for f in findings if f.detector.endswith(_SPLIT_SUFFIX)]
+    exact = [f for f in findings if not f.detector.endswith(SPLIT_SUFFIX)]
+    split = [f for f in findings if f.detector.endswith(SPLIT_SUFFIX)]
 
     kept = _greedy(exact)
     for candidate in sorted(split, key=lambda f: (f.start, -(f.end - f.start))):
@@ -115,7 +141,8 @@ def _resolve_overlaps(findings: list[Finding]) -> list[Finding]:
             continue
         covers = all(candidate.start <= k.start and candidate.end >= k.end for k in conflicts)
         gain = max(candidate.end - k.end for k in conflicts)
-        if covers and gain >= SPLIT_MIN_GAIN:
+        runs = len(_WHITESPACE_RUN.findall(text[candidate.start : candidate.end]))
+        if covers and len(conflicts) == 1 and runs <= 1 and gain >= SPLIT_MIN_GAIN:
             kept = [k for k in kept if k not in conflicts]
             kept.append(candidate)
     return sorted(kept, key=lambda f: (f.start, -(f.end - f.start)))
