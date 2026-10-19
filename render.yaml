@@ -1,0 +1,69 @@
+# Render Blueprint for CipherShield AI (monorepo: FastAPI + Next.js).
+#
+# Deploy: push this repo to GitHub, then Render Dashboard -> New -> Blueprint
+# -> select the repo. Three values are prompted at creation; see
+# docs/deploy-render.md for exactly what to enter for each.
+#
+# Local-first defaults are preserved: external LLM calls stay disabled and
+# vault restore stays disabled until you explicitly configure them.
+
+services:
+  - name: ciphershield-api
+    type: web
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./services/api/Dockerfile
+    dockerContext: ./services/api
+    healthCheckPath: /health
+    envVars:
+      # production disables interactive API docs (/docs) and the OpenAPI file.
+      - key: APP_ENV
+        value: production
+      # Local-first default: mock provider, nothing leaves the server.
+      - key: ALLOW_EXTERNAL_LLM
+        value: "false"
+      - key: DATABASE_URL
+        value: sqlite:///./data/ciphershield.db
+      # Prompted: 64-char hex vault key, e.g.
+      #   python3 -c "import secrets; print(secrets.token_hex(32))"
+      # Keep it stable: existing vault ciphertext is unreadable without it.
+      - key: CIPHERSHIELD_KEY
+        sync: false
+      # Prompted: exact origin of the web UI, e.g.
+      #   https://ciphershield-web.onrender.com
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "60"
+      # Optional real-provider block (server-side only - never prefix with
+      # NEXT_PUBLIC_, never commit values):
+      #   - key: LLM_BASE_URL
+      #     value: https://api.openai.com/v1
+      #   - key: LLM_MODEL
+      #     value: gpt-4o-mini
+      #   - key: LLM_API_KEY
+      #     sync: false
+      #   - key: ALLOW_EXTERNAL_LLM
+      #     value: "true"
+      # Optional explicit restore authorization (disabled until set):
+      #   - key: VAULT_RESTORE_TOKEN
+      #     sync: false
+
+  - name: ciphershield-web
+    type: web
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./apps/web/Dockerfile
+    dockerContext: ./apps/web
+    healthCheckPath: /
+    envVars:
+      # Prompted: the public API URL, e.g.
+      #   https://ciphershield-api.onrender.com
+      # NEXT_PUBLIC_ values are inlined into the browser bundle at build time;
+      # Render exposes env vars to Docker builds as build arguments.
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"

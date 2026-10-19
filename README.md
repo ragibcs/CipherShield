@@ -82,6 +82,11 @@ docker compose up --build
 # API http://localhost:8000/health
 ```
 
+**Deploy to Render:** push to GitHub, then Render → *New → Blueprint* → select
+the repo — the included `render.yaml` provisions both services (you are
+prompted for three values). Full walkthrough, env reference, and caveats:
+[`docs/deploy-render.md`](docs/deploy-render.md).
+
 Open <http://localhost:3000> — the Analyze screen works fully in mock mode.
 
 ### Enabling a real OpenAI-compatible provider
