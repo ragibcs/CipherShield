@@ -1,0 +1,48 @@
+# CipherShield AI — local demo stack (mock mode by default; no API key needed).
+#
+#   docker compose up --build
+#   -> UI  http://localhost:3000
+#   -> API http://localhost:8000/health
+#
+# External LLM calls stay disabled unless you set ALLOW_EXTERNAL_LLM=true and
+# provide provider configuration — never commit those values.
+
+services:
+  api:
+    build: ./services/api
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      BACKEND_HOST: 0.0.0.0
+      BACKEND_PORT: "8000"
+      DATABASE_URL: sqlite:///./data/ciphershield.db
+      CIPHERSHIELD_KEY_FILE: /var/lib/ciphershield/local-master.key
+      ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      ALLOW_EXTERNAL_LLM: ${ALLOW_EXTERNAL_LLM:-false}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      VAULT_RESTORE_TOKEN: ${VAULT_RESTORE_TOKEN:-}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ciphershield-data:/srv/ciphershield-api/data
+      - ciphershield-secrets:/var/lib/ciphershield
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  ciphershield-data:
+  ciphershield-secrets:
