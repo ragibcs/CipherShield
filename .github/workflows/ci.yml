@@ -56,6 +56,31 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: "1"
 
+  docker:
+    name: Docker (production image build + smoke test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build all-in-one production image
+        run: docker build -t ciphershield:ci .
+      - name: Smoke test (single published port, same-origin proxy)
+        run: |
+          set -euo pipefail
+          docker run -d --name ci-smoke -p 18080:18080 -e PORT=18080 ciphershield:ci
+          ok=0
+          for i in $(seq 1 45); do
+            if curl -fsS http://localhost:18080/health | grep -q '"status":"ok"'; then ok=1; break; fi
+            sleep 2
+          done
+          test "$ok" -eq 1
+          code=$(curl -fsS -o /dev/null -w '%{http_code}' http://localhost:18080/)
+          test "$code" = "200"
+          docker inspect --format '{{.State.Health.Status}}' ci-smoke | grep -q healthy
+          docker logs ci-smoke
+      - name: Teardown
+        if: always()
+        run: docker rm -f ci-smoke || true
+
   evaluation:
     name: Security evaluation (measured metrics)
     runs-on: ubuntu-latest

@@ -16,5 +16,9 @@ services/api/*.egg-info
 .env.*
 !.env.example
 docs/
-eval/
 scripts/
+# eval: keep only the measured summary as baked-in UI evidence.
+eval/*
+!eval/results/
+eval/results/*
+!eval/results/summary.json
