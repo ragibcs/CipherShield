@@ -143,3 +143,29 @@ class EvaluationSummaryResponse(BaseModel):
     source: str | None = None
     metrics: dict[str, float | int | dict[str, float]] = Field(default_factory=dict)
     note: str = ""
+
+
+class ScenarioMetaOut(BaseModel):
+    id: str
+    title: str
+    description: str
+    expected: str
+    abuse_case: str
+
+
+class ScenarioListResponse(BaseModel):
+    scenarios: list[ScenarioMetaOut]
+
+
+class ScenarioRunRequest(BaseModel):
+    scenario_id: str = Field(min_length=1, max_length=64)
+
+
+class ScenarioRunResponse(BaseModel):
+    scenario_id: str
+    title: str
+    expected: str
+    actual: str
+    passed: bool
+    evidence: dict[str, object] = Field(default_factory=dict)
+    ran_at: str

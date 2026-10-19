@@ -14,6 +14,10 @@ from app.schemas.analysis import (
     ResponseInspectionOut,
     RestoreRequest,
     RestoreResponse,
+    ScenarioListResponse,
+    ScenarioMetaOut,
+    ScenarioRunRequest,
+    ScenarioRunResponse,
     VaultRecordOut,
 )
 
@@ -31,5 +35,9 @@ __all__ = [
     "ResponseInspectionOut",
     "RestoreRequest",
     "RestoreResponse",
+    "ScenarioListResponse",
+    "ScenarioMetaOut",
+    "ScenarioRunRequest",
+    "ScenarioRunResponse",
     "VaultRecordOut",
 ]

@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app import __version__
-from app.api.routes import analyze, audit, evaluation, health, vault
+from app.api.routes import analyze, audit, evaluation, health, lab, vault
 from app.container import Services, build_services
 from app.core.config import Settings, load_dotenv
 from app.core.errors import CipherShieldError
@@ -94,4 +94,5 @@ def create_app(settings: Settings | None = None, services: Services | None = Non
     app.include_router(audit.router)
     app.include_router(vault.router)
     app.include_router(evaluation.router)
+    app.include_router(lab.router)
     return app
