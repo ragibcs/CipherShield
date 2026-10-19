@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import socket
 
 import pytest
 
@@ -13,6 +14,17 @@ from app.services.tokenization import Tokenizer
 from app.services.vault import StaticKeyProvider, VaultStore
 
 TEST_KEY = bytes.fromhex("ab" * 32)
+
+
+@pytest.fixture(autouse=True)
+def _block_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """INV-11: no test in this suite may open a socket."""
+
+    def _blocked(*args: object, **kwargs: object) -> None:
+        raise AssertionError("network access attempted during tests")
+
+    monkeypatch.setattr(socket.socket, "connect", _blocked)
+    monkeypatch.setattr(socket, "create_connection", _blocked)
 
 
 @pytest.fixture(autouse=True)
