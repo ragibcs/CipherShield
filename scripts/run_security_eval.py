@@ -118,6 +118,7 @@ def _evaluate_pipeline(corpus: dict[str, Any]) -> dict[str, Any]:
         pipeline_blocks = 0
         attack_attempts = attack_successes = 0
         attack_breakdown: list[dict[str, Any]] = []
+        evidence_example: dict[str, Any] | None = None
         benign_docs = benign_docs_total(corpus)
 
         def record(attack_id: str, attack: str, success: bool, detail: str) -> None:
@@ -235,6 +236,16 @@ def _evaluate_pipeline(corpus: dict[str, Any]) -> dict[str, Any]:
                     known_leaked += 1
 
             approved += 1
+            if evidence_example is None:
+                # B4: capture the exact sanitized request that passed the gate,
+                # plus a measured absence check for that request's own secrets.
+                evidence_example = {
+                    "document_id": document["id"],
+                    "serialized_request": serialized,
+                    "known_secrets_checked": len(known),
+                    "raw_secrets_absent": all(s not in serialized for s in known),
+                    "provider_key_absent": FAKE_PROVIDER_KEY not in serialized,
+                }
             t0 = time.perf_counter()
             response = services.provider.complete(
                 ProviderRequest(
@@ -267,6 +278,11 @@ def _evaluate_pipeline(corpus: dict[str, Any]) -> dict[str, Any]:
         provider_calls_completed = provider.call_count
         services.close()
 
+    # Every completed call must correspond to an approved task: any excess
+    # would mean a blocked/attack path reached the provider.
+    provider_calls_beyond_approved = provider_calls_completed - approved
+    llm_model_used = settings.llm_model
+
     return {
         "known_secrets_supplied": known_supplied,
         "known_secrets_leaked": known_leaked,
@@ -289,6 +305,9 @@ def _evaluate_pipeline(corpus: dict[str, Any]) -> dict[str, Any]:
         "lab_total": len(lab_runs),
         "lab_passed": sum(1 for run in lab_runs if run["passed"]),
         "provider_calls_completed": provider_calls_completed,
+        "provider_calls_beyond_approved": provider_calls_beyond_approved,
+        "llm_model": llm_model_used,
+        "evidence": evidence_example,
         "local_latency_ms": local_latencies,
         "e2e_latency_ms": e2e_latencies,
     }
@@ -345,6 +364,7 @@ def main() -> int:
         "latency_e2e_p50_ms": round(_percentile(e2e, 50), 3),
         "latency_e2e_p95_ms": round(_percentile(e2e, 95), 3),
         "provider_calls_completed": pipeline["provider_calls_completed"],
+        "provider_calls_beyond_approved": pipeline["provider_calls_beyond_approved"],
         "lab_scenarios_passed": _rate(pipeline["lab_passed"], pipeline["lab_total"]),
         "test_suite_passed": suite["passed"],
         "test_suite_failed": suite["failed"],
@@ -364,11 +384,14 @@ def main() -> int:
         "config": {
             "provider": "mock (offline)",
             "mode": "mock",
+            "llm_model": pipeline["llm_model"],
+            "external_calls_opt_in": "simulated (gate enabled, transport mocked)",
             "corpus_documents": len(corpus["documents"]),
             "test_command": suite["command"],
             "test_suite_exit_code": suite["exit_code"],
             "test_suite_duration_s": suite["duration_s"],
         },
+        "evidence": pipeline["evidence"],
         "metrics": metrics,
         "attack_breakdown": pipeline["attack_breakdown"],
         "lab_runs": pipeline["lab_runs"],
@@ -429,6 +452,21 @@ def _render_report(summary: dict[str, Any]) -> str:
     for run in summary["lab_runs"]:
         verdict = "yes" if run["passed"] else "NO"
         lines.append(f"| {run['id']} | {run['abuse_case']} | {verdict} |")
+    evidence = summary.get("evidence") or {}
+    lines += ["", "## Sanitized request evidence (exact bytes that passed the gate)", ""]
+    if evidence:
+        lines += [
+            f"- Document: `{evidence.get('document_id')}` — "
+            f"{evidence.get('known_secrets_checked')} known secret(s) checked",
+            f"- Raw secrets absent from this request: **{evidence.get('raw_secrets_absent')}**",
+            f"- Provider key absent from this request: **{evidence.get('provider_key_absent')}**",
+            "",
+            "```json",
+            str(evidence.get("serialized_request", "")),
+            "```",
+        ]
+    else:
+        lines.append("- No approved task was produced in this run.")
     lines += ["", "## Limitations", ""]
     lines += [f"- {item}" for item in summary["limitations"]]
     lines.append("")

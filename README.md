@@ -11,8 +11,13 @@ authorized, audited action.
 
 > **Claim scope:** we say *local-first secret-isolating gateway*, not
 > "zero knowledge". Regex detection is incomplete by design and is not a
-> universal DLP solution. See [`security/threat-model.md`](security/threat-model.md)
-> for what this system does **not** protect against.
+> universal DLP solution. This is **not** encrypted/homomorphic
+> inference: the external model receives a readable-but-sanitized prompt
+> (placeholders only) — the keys and raw mappings stay behind the
+> boundary. See [`security/threat-model.md`](security/threat-model.md)
+> for what this system does **not** protect against and
+> [`security/key-management.md`](security/key-management.md) for key
+> roles, rotation, and invalid-key behavior.
 
 ## Problem
 
@@ -89,6 +94,20 @@ same-origin: the browser only needs ONE port):
 docker build -t ciphershield .
 docker run --rm -p 3000:3000 ciphershield
 # http://localhost:3000  (UI; /health and /api/* proxy to the bundled API)
+```
+
+The image is production-oriented: non-root user, `tini` PID 1, a process
+supervisor that exits if either process dies (verified: API death →
+container exit ≠ 0, `docker stop` → exit 0), `APP_ENV=production`
+(OpenAPI `/docs` off), mock mode by default, and the measured evaluation
+report baked in for the Audit & Evaluation screen. For persistence and a
+stable vault key:
+
+```bash
+docker run --rm -p 3000:3000 \
+  -e CIPHERSHIELD_KEY=<64-hex-key> \
+  -v ciphershield-data:/srv/ciphershield/data \
+  ciphershield
 ```
 
 **Deploy to Render:** push to GitHub, then Render → *New → Blueprint* → select

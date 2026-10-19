@@ -2,6 +2,11 @@
 
 Local-first secret-isolating AI gateway. Backend: Python/FastAPI. Frontend: Next.js/TypeScript.
 
+Governing specs: `CipherShield_AI_Merged_Claude_Code_Implementation_Plan.md`
+(merged competition-compliance update + original plan). Final mapping of
+requirements → tests/evidence: `docs/compliance-matrix.md`. Key roles and
+rotation: `security/key-management.md`.
+
 ## Commands
 
 ```bash
@@ -29,8 +34,8 @@ cd services/api && python ../../scripts/run_security_eval.py
 
 - `apps/web` — Next.js UI (untrusted; no secrets ever reach it).
 - `services/api` — FastAPI backend: `app/services/{detection,tokenization,vault,providers,policy,response_inspection,audit}`, `app/api/routes`, `app/schemas`, `app/core`.
-- `security/` — threat model, security invariants, abuse cases, evaluation protocol.
-- `docs/` — architecture, decisions, demo script, submission checklist.
+- `security/` — threat model (incl. per-hop protections §2b), security invariants, abuse cases, evaluation protocol, key management.
+- `docs/` — architecture, decisions, demo script, submission checklist, compliance matrix.
 - `scripts/` — demo data generator and evaluation runner.
 - `eval/` — measured evaluation output (generated, then committed as evidence).
 

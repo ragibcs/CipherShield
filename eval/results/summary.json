@@ -1,14 +1,23 @@
 {
-  "generated_at": "2026-10-19T21:21:22.514183+00:00",
+  "generated_at": "2026-10-19T23:15:20.014906+00:00",
   "source": "scripts/run_security_eval.py",
   "note": "Measured output from an offline run against the synthetic corpus (eval/corpus/corpus.json) using the deterministic mock provider. Scoped to this corpus and the configured detectors - not a universal zero-leakage claim.",
   "config": {
     "provider": "mock (offline)",
     "mode": "mock",
+    "llm_model": "eval-mock",
+    "external_calls_opt_in": "simulated (gate enabled, transport mocked)",
     "corpus_documents": 18,
     "test_command": "pytest -q --tb=no",
     "test_suite_exit_code": 0,
     "test_suite_duration_s": 1.31
+  },
+  "evidence": {
+    "document_id": "secret-001",
+    "serialized_request": "{\"model\": \"eval-mock\", \"messages\": [{\"role\": \"system\", \"content\": \"You are a security analysis assistant. The content below contains opaque placeholders such as [SECRET_01] that stand in for redacted values. Never ask for, guess, or attempt to reconstruct original values. Respond with a concise risk summary and recommended next steps based only on the text given.\"}, {\"role\": \"user\", \"content\": \"INCIDENT INC-901: payment worker crashed after deploy. The service account key [SECRET_01] appeared in a support ticket body. Root cause analysis pending.\"}], \"max_tokens\": 1200, \"temperature\": 0.0}",
+    "known_secrets_checked": 1,
+    "raw_secrets_absent": true,
+    "provider_key_absent": true
   },
   "metrics": {
     "known_secret_outbound_leakage_rate": 0.0,
@@ -24,13 +33,14 @@
     "false_positive_rate": 0.0,
     "benign_documents_with_redactions": 0.0,
     "task_utility": 1.0,
-    "latency_local_p50_ms": 0.448,
-    "latency_local_p95_ms": 0.648,
-    "latency_e2e_p50_ms": 0.566,
-    "latency_e2e_p95_ms": 0.585,
+    "latency_local_p50_ms": 0.341,
+    "latency_local_p95_ms": 0.66,
+    "latency_e2e_p50_ms": 0.496,
+    "latency_e2e_p95_ms": 0.734,
     "provider_calls_completed": 4,
+    "provider_calls_beyond_approved": 0,
     "lab_scenarios_passed": 1.0,
-    "test_suite_passed": 112,
+    "test_suite_passed": 116,
     "test_suite_failed": 0,
     "oversized_payloads_rejected": 1,
     "placeholder_spoofs_neutralized": 1

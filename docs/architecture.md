@@ -36,6 +36,20 @@ flowchart TD
 | Audit | `app/services/audit` | Secret-free events with optional hash chain |
 | Routes | `app/api/routes` | `health`, `config/status`, `analyze/preview`, `analyze`, `audit`, `evaluation/summary`, `vault/restore` |
 
+## Data states across the trust boundary
+
+The merged plan (B1) requires the boundary to distinguish four states:
+
+| State | Where | Form |
+|---|---|---|
+| 1. Encrypted original input | Vault store | AES-256-GCM ciphertext (the secret→placeholder mapping); never readable without the VEK |
+| 2. Trusted local processing | Backend process only | Original input exists as plaintext briefly for detection/sanitization; never logged, never audited |
+| 3. Sanitized readable LLM input | The exact serialized request body | Placeholders only — this is what the gate inspects and what may leave the machine |
+| 4. External provider boundary | Outside the trust boundary | Receives state 3 over HTTPS in plaintext (not ciphertext — no homomorphic inference claim); never receives VEK, provider-key material in content, or raw mappings |
+
+Per-hop protection details: `security/threat-model.md` §2b. Key roles,
+rotation, and invalid-key behavior: `security/key-management.md`.
+
 ## Data flow invariants
 
 1. The browser sends raw text only; keys never cross the boundary.

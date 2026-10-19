@@ -263,6 +263,107 @@ def test_rate_limit_blocks_floods(tmp_path) -> None:
     services.close()
 
 
+def test_malicious_provider_response_is_masked_before_ui(tmp_path) -> None:
+    """B5/INV-09 (integration): a provider that repeats a known original
+    secret gets masked by response inspection before it reaches the client."""
+    from app.services.providers.base import ProviderResponse
+
+    class _LeakyProvider:
+        name = "mock"
+        _call_count = 0
+
+        @property
+        def call_count(self) -> int:
+            return self._call_count
+
+        def complete(self, request):  # type: ignore[no-untyped-def]
+            self._call_count += 1
+            return ProviderResponse(
+                text=f"Confirmed: the service key is {FAKE_TOKEN} and owner {FAKE_EMAIL}.",
+                provider="mock",
+                model="mock-echo",
+                latency_ms=1.0,
+            )
+
+    provider = _LeakyProvider()
+    services = build_services(
+        make_settings(tmp_path), key_provider=StaticKeyProvider(TEST_KEY), provider=provider
+    )
+    app = create_app(settings=services.settings, services=services)
+    with TestClient(app, raise_server_exceptions=False) as client:
+        data = client.post("/api/v1/analyze", json={"text": INCIDENT}).json()
+    assert data["status"] == "completed"
+    inspection = data["response_inspection"]
+    assert inspection["leak_detected"] is True
+    assert inspection["action"] in {"mask", "block"}
+    # The raw originals never reach the UI, even though the "model" echoed them.
+    assert FAKE_TOKEN not in data["output"]
+    assert FAKE_EMAIL not in data["output"]
+    assert FAKE_TOKEN not in json.dumps(data)
+    services.close()
+
+
+def test_blocked_request_never_reaches_http_transport(tmp_path) -> None:
+    """B3/INV-04: a gate-blocked analyze makes **zero HTTP transport calls**.
+
+    Uses the real API path with an HTTP provider behind an intercepting
+    MockTransport, proving the gate runs before any network I/O.
+    """
+    import httpx
+
+    settings = make_settings(
+        tmp_path,
+        llm_api_key=API_KEY,
+        llm_base_url="https://provider.test/v1",
+        llm_model="test-model",
+        allow_external_llm=True,
+    )
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "model": "test-model",
+                "choices": [{"message": {"role": "assistant", "content": "analysis ok"}}],
+                "usage": {"prompt_tokens": 8, "completion_tokens": 4},
+            },
+        )
+
+    provider = OpenAICompatibleProvider(
+        base_url="https://provider.test/v1",
+        api_key=API_KEY,
+        model="test-model",
+        transport=httpx.MockTransport(handler),
+    )
+    services = build_services(settings, key_provider=StaticKeyProvider(TEST_KEY), provider=provider)
+    # Narrow the tokenizer so a raw email survives into the serialized body
+    # (defense-in-depth: the gate must catch what detection missed).
+    services.tokenizer = Tokenizer(SecretScanner([ApiTokenDetector()]))
+    app = create_app(settings=settings, services=services)
+    with TestClient(app, raise_server_exceptions=False) as client:
+        blocked = client.post("/api/v1/analyze", json={"text": INCIDENT}).json()
+        assert blocked["status"] == "blocked"
+        assert blocked["policy"]["code"] == "forbidden_category"
+        assert blocked["provider_calls"] == 0
+        assert seen == []  # zero HTTP requests ever attempted
+
+        # Control: the full detector set sanitizes the body and the very same
+        # transport then serves exactly one request.
+        services.tokenizer = Tokenizer(SecretScanner())
+        allowed = client.post("/api/v1/analyze", json={"text": INCIDENT}).json()
+        assert allowed["status"] == "completed"
+        assert allowed["provider_calls"] == 1
+        assert len(seen) == 1
+        # The provider key may authenticate the transport but is absent from
+        # the outbound body, as is the original secret (INV-01/INV-03).
+        assert API_KEY.encode() not in seen[0].content
+        assert FAKE_TOKEN.encode() not in seen[0].content
+        assert b"[SECRET_01]" in seen[0].content
+    services.close()
+
+
 def test_provider_key_registered_with_scrubber(tmp_path, services: Services) -> None:
     """If an HTTP provider is constructed, its key is scrubbed from logs."""
     from app.core.logging import get_scrubber

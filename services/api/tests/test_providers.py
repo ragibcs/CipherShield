@@ -162,6 +162,38 @@ def test_http_adapter_bounds_input_size() -> None:
     provider.close()
 
 
+def test_http_adapter_rejects_malformed_response_shape() -> None:
+    provider = OpenAICompatibleProvider(
+        base_url="https://provider.test/v1",
+        api_key="sk-malformed-fake-0123456789abcdef",
+        model="test-model",
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(200, json={"choices": [], "model": "x"})
+        ),
+    )
+    with pytest.raises(ProviderError) as excinfo:
+        provider.complete(_request())
+    assert "unexpected response shape" in str(excinfo.value)
+    assert provider.call_count == 0  # malformed answers are not counted as completions
+    provider.close()
+
+
+def test_http_adapter_rejects_non_json_body_without_leaking() -> None:
+    body = "<html>gateway error password=hunter2sekrit</html>"
+
+    provider = OpenAICompatibleProvider(
+        base_url="https://provider.test/v1",
+        api_key="sk-nonjson-fake-0123456789abcdef",
+        model="test-model",
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, text=body)),
+    )
+    with pytest.raises(ProviderError) as excinfo:
+        provider.complete(_request())
+    assert "hunter2sekrit" not in str(excinfo.value)  # INV-10: no body echo
+    assert provider.call_count == 0
+    provider.close()
+
+
 def test_http_adapter_requires_configuration() -> None:
     with pytest.raises(ProviderNotConfiguredError):
         OpenAICompatibleProvider(base_url="", api_key="", model="")

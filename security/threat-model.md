@@ -32,6 +32,31 @@ what the system does **not** protect against.
   submitted prompts under its own terms.
 - **Audit store** — minimal metadata only.
 
+## 2b. Protection by hop (B1 — input-protection envelope)
+
+What protects the original input on each leg of its journey:
+
+| Hop | Protection | Notes |
+|---|---|---|
+| Browser → local backend | localhost/loopback binding by default; TLS/HTTPS when remote | `BACKEND_HOST=127.0.0.1` for the local demo; behind a reverse proxy or on Render, terminate TLS at the edge |
+| Original input at rest (secret → placeholder mapping) | AES-256-GCM authenticated encryption in the vault store | Fresh random nonce per record; key held by the key provider (env var / 0600 file), never beside ciphertext |
+| Inside the backend process | Plaintext exists briefly during detection and sanitization only | Never logged, never audited, never returned after tokenization; mapping is sealed before the provider call |
+| Backend → LLM provider | Only the policy-approved **sanitized** prompt, over HTTPS, in the exact serialized body the gate inspected | Gate runs immediately before network I/O; blocked requests never touch the transport |
+
+**Plaintext/ciphertext lifecycle:** raw input (plaintext, request-scoped)
+→ detected + tokenized (plaintext exists only inside the trusted process)
+→ mapping sealed as ciphertext in the vault; sanitized text (no raw
+secrets) leaves the boundary; response scanned before display; restore
+releases plaintext only via an explicit, authorized, audited action.
+
+**Client→backend envelope honesty:** the backend *must* decrypt input to
+analyze it, so an application-level envelope on the browser→backend leg
+would not protect plaintext from the backend. That leg is protected by
+loopback binding (or TLS when remote), not by claiming the server cannot
+read its own input. We do not claim homomorphic inference: the provider
+receives a readable but sanitized prompt, never ciphertext to reason
+over, and never the vault key or raw mapping.
+
 ## 3. Adversaries and goals
 
 | Adversary | Goal | Primary control |
@@ -48,6 +73,10 @@ what the system does **not** protect against.
 - A fully compromised host, kernel, or privileged backend process.
 - Formal "zero knowledge" of the provider — the provider sees whatever
   passes the gate.
+- Encrypted inference: a hosted LLM cannot reason over AES-GCM
+  ciphertext. The external model receives the sanitized prompt in
+  plaintext; the privacy control is redaction + isolation of keys and
+  raw mappings, not ciphertext-only inference.
 - Detection of every possible secret or prompt injection (regex detection
   is incomplete by design and documented as such).
 - Multi-tenant isolation, cloud KMS, DDoS, and physical attacks.
