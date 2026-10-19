@@ -82,12 +82,13 @@ docker compose up --build
 # API http://localhost:8000/health
 ```
 
-Single container instead (API + UI together — repo-root `Dockerfile`):
+Single container instead (API + UI together — repo-root `Dockerfile`,
+same-origin: the browser only needs ONE port):
 
 ```bash
 docker build -t ciphershield .
-docker run --rm -p 3000:3000 -p 8000:8000 ciphershield
-# UI  http://localhost:3000   API http://localhost:8000/health
+docker run --rm -p 3000:3000 ciphershield
+# http://localhost:3000  (UI; /health and /api/* proxy to the bundled API)
 ```
 
 **Deploy to Render:** push to GitHub, then Render → *New → Blueprint* → select

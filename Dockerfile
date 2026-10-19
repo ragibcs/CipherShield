@@ -7,11 +7,11 @@
 #   API: http://localhost:8000/health
 #
 # Notes:
-# - The browser reaches the API at NEXT_PUBLIC_API_URL (build arg, default
-#   http://localhost:8000), so both ports must be published.
-# - For production / Render use the per-service images instead
-#   (services/api/Dockerfile, apps/web/Dockerfile via docker-compose.yml or
-#   render.yaml) - single-port platforms cannot route this two-port layout.
+# - Same-origin by default: the browser calls relative /api/... paths,
+#   which the Next server proxies to the co-located API (next.config rewrites).
+#   Set NEXT_PUBLIC_API_URL only to point the browser at a DIFFERENT origin.
+# - For the two-service setup (docker-compose.yml / render.yaml) use the
+#   per-service images instead (services/api/Dockerfile, apps/web/Dockerfile).
 # - External LLM calls stay disabled (mock provider) unless configured.
 
 # ---------------------------------------------------------------- web build
@@ -20,7 +20,7 @@ WORKDIR /build/web
 COPY apps/web/package.json apps/web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY apps/web/ ./
-ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+ARG NEXT_PUBLIC_API_URL=""
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
     NEXT_TELEMETRY_DISABLED=1
 RUN npm run build

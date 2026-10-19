@@ -1,7 +1,15 @@
 /** Typed API client for the CipherShield backend. */
 
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+/**
+ * API base URL. Empty string = same origin: the Next server proxies
+ * `/api/*` and `/health` to the backend (see next.config.ts rewrites),
+ * which is what single-port deployments and the all-in-one container use.
+ * Cross-origin deployments set NEXT_PUBLIC_API_URL to the public API origin.
+ */
+export const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(
+  /\/+$/,
+  "",
+);
 
 export class ApiError extends Error {
   readonly code: string;

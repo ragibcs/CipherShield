@@ -51,7 +51,23 @@ disabled (mock provider)** and **vault restore is disabled** until you opt in.
 
 ## 3. Manual setup (without Blueprint)
 
-Create two services from the same repo:
+**Option A — all-in-one service (simplest):** one service from the repo-root
+`Dockerfile`.
+
+| Field | Value |
+|---|---|
+| Runtime | **Docker** |
+| Dockerfile Path | `Dockerfile` |
+| Docker Context | `.` |
+| Health Check Path | `/health` |
+| Env vars | none required — the browser uses same-origin `/api/*`, which the Next server proxies to the bundled API |
+
+Everything runs behind the platform's single `$PORT` (UI + proxied API), so
+HTTPS and CORS are non-issues. Leave `NEXT_PUBLIC_API_URL` unset; only set it
+to point at a *different* origin.
+
+**Option B — two services (recommended for production):** create two services
+from the same repo:
 
 **API — Web Service**
 
