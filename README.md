@@ -82,6 +82,14 @@ docker compose up --build
 # API http://localhost:8000/health
 ```
 
+Single container instead (API + UI together — repo-root `Dockerfile`):
+
+```bash
+docker build -t ciphershield .
+docker run --rm -p 3000:3000 -p 8000:8000 ciphershield
+# UI  http://localhost:3000   API http://localhost:8000/health
+```
+
 **Deploy to Render:** push to GitHub, then Render → *New → Blueprint* → select
 the repo — the included `render.yaml` provisions both services (you are
 prompted for three values). Full walkthrough, env reference, and caveats:
