@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from dataclasses import asdict
 
 from app.services.audit import AuditEvent, AuditLog
 from app.services.audit import AuditLog as Log
@@ -38,7 +39,7 @@ def test_events_have_no_free_text_fields(audit: AuditLog) -> None:
         AuditEvent(event_type="analyze", decision="blocked", reason_code="forbidden_category")
     )
     row = audit.list_events()[0]
-    serialized = json.dumps(row.__dict__ if hasattr(row, "__dict__") else {}, default=str)
+    serialized = json.dumps(asdict(row))
     for leak in ("password", "hunter2sekrit", "prompt", "output_text"):
         assert leak not in serialized.lower()
 
